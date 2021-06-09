@@ -3,6 +3,7 @@
 import datetime
 import io
 import os
+import sys
 from pathlib import Path
 from zipfile import ZipFile
 
@@ -60,7 +61,7 @@ def download_extract_csv_zip(url: str, country_code: str = "KOR") -> pd.DataFram
     result = requests.get(url)
     result.raise_for_status()
     zipfile = ZipFile(io.BytesIO(result.content))
-    output_df = pd.DataFrame()
+    output_dfs = []
     for name in zipfile.namelist():
         data = zipfile.read(name)
         df = pd.read_csv(io.BytesIO(data), sep="\t", header=None, index_col=0)
@@ -72,8 +73,8 @@ def download_extract_csv_zip(url: str, country_code: str = "KOR") -> pd.DataFram
             | (df[37] == country_code)
             | (df[53] == country_code)
         ]
-        output_df = pd.concat((output_df, df), axis=0, copy=False)
-    return output_df
+        output_dfs.append(df)
+    return pd.concat(output_dfs, axis=0, copy=False)
 
 
 if __name__ == "__main__":
@@ -83,8 +84,12 @@ if __name__ == "__main__":
     start_time = datetime.datetime.now()
     print(f"Begin downloading {len(master_df['url'])} urls")
     print(f"{start_time}")
-    csv_df = pd.DataFrame()
+    csv_dfs = []
     for i, url in enumerate(tqdm(master_df["url"])):
-        csv_df = pd.concat((csv_df, download_extract_csv_zip(url)), axis=0, copy=False)
+        try:
+            csv_dfs.append(download_extract_csv_zip(url))
+        except:
+            print(f"Skipping i={i} url={url} due to error", sys.exc_info()[0])
 
+    csv_df = pd.concat(csv_dfs, axis=0, copy=False)
     csv_df.to_csv(RESULT_DIRECTORY / "2016_korea.csv", header=False)
